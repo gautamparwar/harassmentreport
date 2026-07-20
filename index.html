@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Community Safety Map</title>
+
+<link rel="stylesheet"
+href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+
+<style>
+
+body{
+
+    margin:0;
+    font-family:Arial, sans-serif;
+
+}
+
+
+#map{
+
+    height:100vh;
+    width:100%;
+
+}
+
+
+#panel{
+
+    position:absolute;
+    z-index:1000;
+
+    top:15px;
+    right:15px;
+
+    width:330px;
+
+    background:white;
+
+    padding:15px;
+
+    border-radius:12px;
+
+    box-shadow:0 5px 20px rgba(0,0,0,.3);
+
+}
+
+
+h2{
+
+    margin-top:0;
+
+}
+
+
+input,
+textarea,
+select,
+button{
+
+    width:100%;
+    padding:10px;
+
+    margin-bottom:10px;
+
+    font-size:15px;
+
+}
+
+
+textarea{
+
+    resize:none;
+
+}
+
+
+button{
+
+    border:none;
+
+    color:white;
+
+    background:#c62828;
+
+    cursor:pointer;
+
+}
+
+
+button:hover{
+
+    background:#8e0000;
+
+}
+
+
+.gps{
+
+    background:#1565c0;
+
+}
+
+
+.gps:hover{
+
+    background:#003c8f;
+
+}
+
+
+.small{
+
+    font-size:13px;
+    color:#555;
+
+}
+
+
+</style>
+
+</head>
+
+
+<body>
+
+
+<div id="panel">
+
+
+<h2>🚨 Safety Report</h2>
+
+
+<p class="small">
+
+Your location is detected automatically.
+You may also tap the map to change the reporting location.
+
+</p>
+
+
+<button class="gps" onclick="getLocation()">
+
+📍 Detect My Location
+
+</button>
+
+
+
+<select id="category">
+
+<option>Poor Lighting</option>
+
+<option>Harassment</option>
+
+<option>Theft</option>
+
+<option>Suspicious Activity</option>
+
+<option>Unsafe Road</option>
+
+<option>Broken Infrastructure</option>
+
+<option>Other</option>
+
+</select>
+
+
+
+<textarea
+
+id="description"
+
+rows="4"
+
+placeholder="Describe the unsafe condition..."
+
+></textarea>
+
+
+
+<button onclick="submitReport()">
+
+Submit Anonymous Report
+
+</button>
+
+
+</div>
+
+
+
+<div id="map"></div>
+
+
+
+<script>
+
+
+// -------------------------
+// MAP INITIALIZATION
+// -------------------------
+
+
+const map = L.map('map')
+.setView([20.5937,78.9629],5);
+
+
+
+L.tileLayer(
+
+'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+
+{
+
+maxZoom:19,
+
+attribution:'© OpenStreetMap contributors'
+
+}
+
+).addTo(map);
+
+
+
+let selectedLocation=null;
+
+let currentMarker=null;
+
+let accuracyCircle=null;
+
+
+
+
+// -------------------------
+// GENERATE ANONYMOUS ID
+// -------------------------
+
+
+function generateReportID(){
+
+return (
+
+"RPT-" +
+
+Date.now().toString(36).toUpperCase()
+
++
+
+"-"
+
++
+
+Math.random()
+
+.toString(36)
+
+.substring(2,7)
+
+.toUpperCase()
+
+);
+
+}
+
+
+
+
+
+// -------------------------
+// GET GPS LOCATION
+// -------------------------
+
+
+function getLocation(){
+
+
+if(!navigator.geolocation){
+
+alert("GPS not supported.");
+
+return;
+
+}
+
+
+
+navigator.geolocation.getCurrentPosition(
+
+function(position){
+
+
+let lat =
+position.coords.latitude;
+
+
+let lng =
+position.coords.longitude;
+
+
+let accuracy =
+position.coords.accuracy;
+
+
+
+selectedLocation=L.latLng(lat,lng);
+
+
+
+if(currentMarker){
+
+map.removeLayer(currentMarker);
+
+}
+
+
+if(accuracyCircle){
+
+map.removeLayer(accuracyCircle);
+
+}
+
+
+
+currentMarker=L.marker(selectedLocation)
+
+.addTo(map);
+
+
+
+accuracyCircle=L.circle(
+
+selectedLocation,
+
+{
+
+radius:accuracy,
+
+color:"#1976d2",
+
+fillColor:"#1976d2",
+
+fillOpacity:.15
+
+}
+
+)
+
+.addTo(map);
+
+
+
+map.fitBounds(
+
+accuracyCircle.getBounds()
+
+);
+
+
+
+currentMarker
+
+.bindPopup(
+
+"📍 Your Current Location"
+
+)
+
+.openPopup();
+
+
+
+},
+
+
+
+function(error){
+
+
+alert(
+
+"Unable to get location. Please allow GPS permission."
+
+);
+
+
+},
+
+
+{
+
+enableHighAccuracy:true,
+
+timeout:10000,
+
+maximumAge:0
+
+}
+
+
+);
+
+
+}
+
+
+
+
+
+// -------------------------
+// CHANGE LOCATION MANUALLY
+// -------------------------
+
+
+map.on(
+
+'click',
+
+function(e){
+
+
+selectedLocation=e.latlng;
+
+
+
+if(currentMarker){
+
+map.removeLayer(currentMarker);
+
+}
+
+
+
+if(accuracyCircle){
+
+map.removeLayer(accuracyCircle);
+
+accuracyCircle=null;
+
+}
+
+
+
+currentMarker=L.marker(
+
+selectedLocation
+
+)
+
+.addTo(map);
+
+
+
+currentMarker
+
+.bindPopup(
+
+"Selected Report Location"
+
+)
+
+.openPopup();
+
+
+
+}
+
+);
+
+
+
+
+
+// -------------------------
+// SUBMIT REPORT
+// -------------------------
+
+
+function submitReport(){
+
+
+
+if(!selectedLocation){
+
+alert(
+
+"Please detect GPS location or click on the map."
+
+);
+
+return;
+
+}
+
+
+
+let category=
+
+document.getElementById("category").value;
+
+
+
+let description=
+
+document.getElementById("description").value;
+
+
+
+let reportID=
+
+generateReportID();
+
+
+
+let timestamp=
+
+new Date()
+
+.toLocaleString();
+
+
+
+
+
+// Create public marker
+
+
+let reportMarker=
+
+L.circleMarker(
+
+selectedLocation,
+
+{
+
+radius:10,
+
+color:"red",
+
+fillColor:"red",
+
+fillOpacity:.8
+
+}
+
+)
+
+.addTo(map);
+
+
+
+
+
+reportMarker.bindPopup(`
+
+
+<b>🚨 ${category}</b>
+
+<br><br>
+
+
+<b>Anonymous Report ID:</b>
+
+<br>
+
+${reportID}
+
+
+<br><br>
+
+
+<b>Date & Time:</b>
+
+<br>
+
+${timestamp}
+
+
+<br><br>
+
+
+<b>Description:</b>
+
+<br>
+
+${description || "No description provided"}
+
+
+<br><br>
+
+
+<b>Coordinates:</b>
+
+<br>
+
+${selectedLocation.lat.toFixed(6)},
+
+${selectedLocation.lng.toFixed(6)}
+
+
+`);
+
+
+
+
+
+// clear temporary marker
+
+
+if(currentMarker){
+
+map.removeLayer(currentMarker);
+
+currentMarker=null;
+
+}
+
+
+
+if(accuracyCircle){
+
+map.removeLayer(accuracyCircle);
+
+accuracyCircle=null;
+
+}
+
+
+
+
+selectedLocation=null;
+
+
+document.getElementById("description").value="";
+
+
+
+alert(
+
+"Report submitted successfully!\n\nYour Report ID:\n"+reportID
+
+);
+
+
+
+}
+
+
+
+
+
+// -------------------------
+// AUTO GPS ON LOAD
+// -------------------------
+
+
+window.onload=function(){
+
+getLocation();
+
+};
+
+
+
+</script>
+
+
+</body>
+
+</html>
