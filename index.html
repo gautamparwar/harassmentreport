@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+<title>Community Safety Map</title>
+
+<meta name="viewport" content="width=device-width,initial-scale=1">
+
+<link rel="stylesheet"
+href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+
+<style>
+
+body{
+margin:0;
+font-family:Arial;
+}
+
+
+#map{
+
+height:100vh;
+
+}
+
+
+#panel{
+
+position:absolute;
+
+z-index:999;
+
+top:10px;
+
+right:10px;
+
+width:320px;
+
+background:white;
+
+padding:15px;
+
+border-radius:10px;
+
+box-shadow:0 0 15px #555;
+
+}
+
+
+input,textarea,select,button{
+
+width:100%;
+
+padding:10px;
+
+margin-top:8px;
+
+}
+
+
+button{
+
+background:#c62828;
+
+color:white;
+
+border:none;
+
+cursor:pointer;
+
+}
+
+
+.gps{
+
+background:#1565c0;
+
+}
+
+
+</style>
+
+</head>
+
+
+<body>
+
+
+<div id="panel">
+
+
+<h3>🚨 Safety Report</h3>
+
+
+<button class="gps"
+onclick="getLocation()">
+
+📍 Detect My Location
+
+</button>
+
+
+<select id="category">
+
+<option>Poor Lighting</option>
+
+<option>Harassment</option>
+
+<option>Theft</option>
+
+<option>Suspicious Activity</option>
+
+<option>Unsafe Road</option>
+
+<option>Broken Infrastructure</option>
+
+<option>Other</option>
+
+</select>
+
+
+
+<textarea id="description"
+placeholder="Describe the problem">
+
+</textarea>
+
+
+
+<button onclick="submitReport()">
+
+Submit Anonymous Report
+
+</button>
+
+
+</div>
+
+
+
+<div id="map"></div>
+
+
+
+<script>
+
+
+// =====================
+// SUPABASE CONNECTION
+// =====================
+
+
+const SUPABASE_URL =
+"https://qnidqvklagwjrihlocxh.supabase.co/rest/v1/";
+
+
+const SUPABASE_KEY =
+"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFuaWRxdmtsYWd3anJpaGxvY3hoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ1NDEwNzIsImV4cCI6MjEwMDExNzA3Mn0.R98ONf6DTove9-5Vp1zj-Q7-mc4zt9wid-Zpxny6ngs";
+
+
+const db =
+supabase.createClient(
+
+SUPABASE_URL,
+
+SUPABASE_KEY
+
+);
+
+
+
+// =====================
+// MAP
+// =====================
+
+
+const map=L.map('map')
+.setView([20.59,78.96],5);
+
+
+
+L.tileLayer(
+
+'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+
+{
+
+maxZoom:19
+
+}
+
+).addTo(map);
+
+
+
+let selectedLocation=null;
+
+let tempMarker=null;
+
+let accuracyCircle=null;
+
+
+
+
+// =====================
+// REPORT ID
+// =====================
+
+
+function generateReportID(){
+
+return (
+
+"RPT-"+
+
+Date.now().toString(36).toUpperCase()
+
++
+
+"-"+
+
+Math.random()
+.toString(36)
+.substring(2,7)
+.toUpperCase()
+
+);
+
+}
+
+
+
+
+
+// =====================
+// GPS
+// =====================
+
+
+function getLocation(){
+
+
+navigator.geolocation.getCurrentPosition(
+
+function(pos){
+
+
+let lat=pos.coords.latitude;
+
+let lng=pos.coords.longitude;
+
+
+selectedLocation=L.latLng(lat,lng);
+
+
+
+if(tempMarker)
+
+map.removeLayer(tempMarker);
+
+
+
+tempMarker=L.marker(selectedLocation)
+
+.addTo(map);
+
+
+
+map.setView(
+
+selectedLocation,
+
+18
+
+);
+
+
+
+tempMarker
+.bindPopup("Your Location")
+.openPopup();
+
+
+
+}
+
+);
+
+
+}
+
+
+
+
+// =====================
+// CLICK MAP
+// =====================
+
+
+map.on('click',function(e){
+
+
+selectedLocation=e.latlng;
+
+
+if(tempMarker)
+
+map.removeLayer(tempMarker);
+
+
+
+tempMarker=L.marker(
+selectedLocation
+)
+
+.addTo(map);
+
+
+});
+
+
+
+
+
+// =====================
+// SAVE REPORT
+// =====================
+
+
+async function submitReport(){
+
+
+if(!selectedLocation){
+
+alert("Select location first");
+
+return;
+
+}
+
+
+
+let report={
+
+
+report_id:
+generateReportID(),
+
+
+category:
+document.getElementById("category").value,
+
+
+description:
+document.getElementById("description").value,
+
+
+latitude:
+selectedLocation.lat,
+
+
+longitude:
+selectedLocation.lng,
+
+
+timestamp:
+new Date().toISOString()
+
+
+};
+
+
+
+const {error}=await db
+
+.from("safety_reports")
+
+.insert([report]);
+
+
+
+if(error){
+
+alert(error.message);
+
+return;
+
+}
+
+
+
+addMarker(report);
+
+
+
+alert(
+
+"Report Saved\n"+
+report.report_id
+
+);
+
+
+
+}
+
+
+
+
+// =====================
+// DISPLAY MARKER
+// =====================
+
+
+function addMarker(report){
+
+
+let marker=L.circleMarker(
+
+[
+
+report.latitude,
+
+report.longitude
+
+],
+
+{
+
+radius:8,
+
+color:"red",
+
+fillColor:"red",
+
+fillOpacity:.8
+
+}
+
+)
+
+.addTo(map);
+
+
+
+marker.bindPopup(`
+
+
+<b>🚨 ${report.category}</b>
+
+<br><br>
+
+
+ID:
+
+${report.report_id}
+
+
+<br><br>
+
+
+Time:
+
+${new Date(report.timestamp)
+.toLocaleString()}
+
+
+<br><br>
+
+
+${report.description}
+
+
+`);
+
+}
+
+
+
+
+
+// =====================
+// LOAD EXISTING REPORTS
+// =====================
+
+
+async function loadReports(){
+
+
+const {data,error}=
+
+await db
+
+.from("safety_reports")
+
+.select("*");
+
+
+
+if(error){
+
+console.log(error);
+
+return;
+
+}
+
+
+
+data.forEach(addMarker);
+
+
+
+}
+
+
+
+
+// =====================
+// START
+// =====================
+
+
+window.onload=function(){
+
+getLocation();
+
+loadReports();
+
+};
+
+
+
+</script>
+
+
+</body>
+
+</html>
